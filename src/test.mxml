@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+					   xmlns:s="library://ns.adobe.com/flex/spark"
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   initialize="windowedapplication1_initializeHandler(event)">
+	
+	<fx:Script> <![CDATA[ 
+		import flash.desktop.NativeProcess;
+		import flash.desktop.NativeProcessStartupInfo;
+		import flash.events.NativeProcessExitEvent;
+		import flash.events.ProgressEvent;
+		import flash.filesystem.File;
+		import flash.filesystem.FileMode;
+		import flash.filesystem.FileStream;
+		import flash.net.URLRequest;
+		import flash.net.URLStream;
+		import flash.utils.ByteArray;
+		
+		import mx.collections.ArrayCollection;
+		import mx.events.CollectionEvent;
+		import mx.events.FlexEvent;
+		
+		import zip.Zip;
+		import zip.ZipEvent;
+		import zip.ZipFile;
+		
+			private var nativeWebView:StageWebView = new StageWebView();
+			[Bindable]
+			private var stageWebOpen:Boolean = false;
+			[Bindable]
+			private var events:ArrayCollection = new ArrayCollection();
+		function updateTextarea(event:CollectionEvent):void {
+			// Clear the current text in the textarea
+			textArea.text = "";
+			
+			// Iterate through the strings in the ArrayCollection and append them to the textarea
+			for each (var str:String in events) {
+				textArea.text += str + "\n";
+			}
+			textArea.textDisplay.verticalScrollPosition = events.length * 30
+		}
+
+		// Function to update the textarea when the ArrayCollection changes
+
+		protected function button1_clickHandler(event:MouseEvent):void
+		{
+			trace("MainContainer iframeImage_clickHandler");
+			if(!stageWebOpen){
+				nativeWebView = new StageWebView(true);
+				nativeWebView.stage=this.stage;
+				nativeWebView.viewPort=new Rectangle(50,70,750,500);	
+			}
+			var htmlString:String = "<!DOCTYPE HTML>" +
+				"<html>" +
+				"<body>" +txtUrl.text +
+			"<iframe src='"+txtUrl.text+"' height=500 width=750></iframe>"+
+				"</body>" +
+				"</html>";
+			nativeWebView.loadString( htmlString, "text/html" );
+			stageWebOpen=true;
+		}
+		
+		protected function windowedapplication1_initializeHandler(event:FlexEvent):void
+		{
+			
+			// Add a change event listener to the ArrayCollection
+			events.addEventListener(CollectionEvent.COLLECTION_CHANGE, updateTextarea);
+		var packageJsonUrl:String = "https://raw.githubusercontent.com/flexicious/mmtest/main/package.json";
+		var zipUrl:String = "https://github.com/flexicious/mmtest/archive/refs/heads/main.zip";
+		
+		events.addItem("Initializing")
+		var folder:File = new File("C:/Mastermind/mmserver");
+		
+		events.addItem("Checking " + folder.nativePath)
+		if (!folder.exists) {
+			
+			events.addItem("Creating " + folder.nativePath)
+			folder.createDirectory();
+		}
+			
+			var packageJsonFile:File = folder.resolvePath("package.json");
+			events.addItem("Checking " + packageJsonFile.nativePath)
+			
+			if (packageJsonFile.exists) {
+				events.addItem("Reading " + packageJsonFile.nativePath)
+
+				// Read and parse the contents of package.json
+				var packageJsonStream:FileStream = new FileStream();
+				packageJsonStream.open(packageJsonFile, FileMode.READ);
+				var packageJsonData:String = packageJsonStream.readUTFBytes(packageJsonStream.bytesAvailable);
+				packageJsonStream.close();
+				events.addItem("Parsing " + packageJsonFile.nativePath)
+				var packageJson:Object = JSON.parse(packageJsonData);
+				var localVersion:String = packageJson.version;
+				events.addItem("Version found " + localVersion)
+				
+				// Download the latest version of package.json
+				var packageJsonUrlStream:URLStream = new URLStream();
+				var packageJsonUrlRequest:URLRequest = new URLRequest(packageJsonUrl);
+				packageJsonUrlStream.addEventListener(Event.COMPLETE, onPackageJsonDownloaded);
+				events.addItem("Loading Server version " + packageJsonUrl)
+				packageJsonUrlStream.load(packageJsonUrlRequest);
+			} else {
+				events.addItem("Downloading Package Json")
+				// package.json doesn't exist, so download it
+				downloadPackageJson();
+			}
+			
+			
+			function onPackageJsonDownloaded(event:Event):void {
+				events.addItem("onPackageJsonDownloaded")
+				var packageJsonUrlStream:URLStream = event.target as URLStream;
+				var packageJsonData:String = packageJsonUrlStream.readUTFBytes(packageJsonUrlStream.bytesAvailable);
+				events.addItem("parsing packageJsonData")
+				var packageJson:Object = JSON.parse(packageJsonData);
+				var remoteVersion:String = packageJson.version;
+				events.addItem("packageJson.version" + remoteVersion)
+				
+				if (localVersion != remoteVersion) {
+					events.addItem("Local version does not match, downloading zip" + localVersion +":" + remoteVersion)
+					// The versions don't match, so download the latest version
+					downloadZip();
+				} else {
+					events.addItem("Local version matched, starting server")
+					startServer();
+				}
+			}
+			
+			function downloadPackageJson():void {
+				
+				var packageJsonUrlStream:URLStream = new URLStream();
+				events.addItem("Downloading package json from " + packageJsonUrl);
+
+				var packageJsonUrlRequest:URLRequest = new URLRequest(packageJsonUrl);
+				packageJsonUrlStream.addEventListener(Event.COMPLETE, onPackageJsonDownloaded);
+				packageJsonUrlStream.load(packageJsonUrlRequest);
+			}
+			
+			function downloadZip():void {
+				
+				var zipUrlStream:URLStream = new URLStream();
+				events.addItem("Downloading zip from " + zipUrl);
+				var zipUrlRequest:URLRequest = new URLRequest(zipUrl);
+				var ozip:Zip = new Zip();
+				ozip.load(zipUrlRequest);
+				ozip.addEventListener(Event.COMPLETE, onZipComplete);
+				
+			}
+
+			function onZipComplete(event:Event):void{
+				var ozip:Zip = event.target as Zip;
+				events.addItem("Zip complete, " + ozip.getFileCount().toString() + " files found, extracting");
+				for (var i:int = 0; i < ozip.getFileCount(); i++) {
+					var entry:ZipFile = ozip.getFileAt(i) as ZipFile;
+					if(entry.filename.indexOf(".") == -1) continue;
+
+					// Create a File object for the entry's file path
+					var entryFile:File = folder.resolvePath(entry.filename.replace("mmtest-main/",""));
+					// Create the parent directories if they don't exist
+					if(!entryFile.parent.exists)
+						entryFile.parent.createDirectory();
+					// Create a FileStream object and open it in write mode
+					var entryStream:FileStream = new FileStream();
+					entryStream.open(entryFile, FileMode.WRITE);
+					// Write the entry's data to the file
+					entryStream.writeBytes(entry.content);
+					// Close the FileStream
+					entryStream.close();
+				}
+				events.addItem("Extraction complete, starting server");
+				startServer();
+			}
+
+			function startServer(){
+				// create a NativeProcessStartupInfo object
+				var startupInfo:NativeProcessStartupInfo = new NativeProcessStartupInfo();
+				
+				// set the executable for the process to be the Command Prompt
+				startupInfo.executable = new File("C:\\Windows\\System32\\cmd.exe");
+				
+				// create an array of arguments to pass to the Command Prompt
+				var args:Vector.<String> = new Vector.<String>();
+				args.push("/c");  // this argument tells the Command Prompt to run the following command and then exit
+				var exePath:String = folder.resolvePath("start.bat").nativePath;
+				events.addItem("Executing " + exePath);
+				args.push(exePath);  // this is the command to run the batch file
+				startupInfo.arguments = args;
+				startupInfo.workingDirectory = folder;
+				
+				
+				// create a NativeProcess object
+				var process:NativeProcess = new NativeProcess();
+				
+				// add event listeners for when the process exits and when it outputs data
+				process.addEventListener(NativeProcessExitEvent.EXIT, onProcessExit);
+				process.addEventListener(ProgressEvent.STANDARD_OUTPUT_DATA, onOutputData);
+				process.addEventListener(ProgressEvent.STANDARD_ERROR_DATA, onStandardErrorData);
+				
+				// start the process
+				process.start(startupInfo);
+				
+				// this function is called when the process exits
+				function onProcessExit(event:NativeProcessExitEvent):void {
+					events.addItem("Process exited with code: " + event.exitCode);
+				}
+				
+				// this function is called when the process outputs data
+				function onOutputData(event:ProgressEvent):void {
+					events.addItem("Received output data: " + process.standardOutput.readUTFBytes(process.standardOutput.bytesAvailable));
+				}
+				
+				// this function is called when the process outputs data
+				function onStandardErrorData(event:ProgressEvent):void {
+					events.addItem("Received error data: " + process.standardError.readUTFBytes(process.standardError.bytesAvailable));
+				}
+						
+
+			}
+			
+			
+		}
+		
+	]]>
+	</fx:Script>
+	<s:HGroup buttonMode="true" gap="0" horizontalAlign="center" paddingRight="-5" paddingTop="0">
+		<s:TextInput id="txtUrl" width="200" text="http://localhost:3000">
+			
+		</s:TextInput>
+		<s:Button click="button1_clickHandler(event)">
+			Load
+		</s:Button>
+		<s:TextArea id="textArea" width="800">
+			
+		</s:TextArea>
+	</s:HGroup>
+</s:WindowedApplication>
