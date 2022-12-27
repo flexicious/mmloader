@@ -180,8 +180,9 @@
 				
 				// create an array of arguments to pass to the Command Prompt
 				var args:Vector.<String> = new Vector.<String>();
+				var dbFilePath:String = "C:\\Users\\USERS\\Downloads\\database.db"
 				args.push("/c");  // this argument tells the Command Prompt to run the following command and then exit
-				var exePath:String = folder.resolvePath("start.bat").nativePath;
+				var exePath:String = folder.resolvePath("start.bat").nativePath+ " " +dbFilePath;
 				events.addItem("Executing " + exePath);
 				args.push(exePath);  // this is the command to run the batch file
 				startupInfo.arguments = args;
