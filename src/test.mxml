@@ -2,7 +2,7 @@
 <s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
 					   xmlns:s="library://ns.adobe.com/flex/spark"
 					   xmlns:mx="library://ns.adobe.com/flex/mx"
-					   initialize="windowedapplication1_initializeHandler(event)">
+					   initialize="windowedapplication2_initializeHandler(event)">
 	
 	<fx:Script> <![CDATA[ 
 		import flash.desktop.NativeProcess;
@@ -17,6 +17,7 @@
 		import flash.utils.ByteArray;
 		
 		import mx.collections.ArrayCollection;
+		import mx.controls.Alert;
 		import mx.events.CollectionEvent;
 		import mx.events.FlexEvent;
 		
@@ -24,11 +25,11 @@
 		import zip.ZipEvent;
 		import zip.ZipFile;
 		
-			private var nativeWebView:StageWebView = new StageWebView();
-			[Bindable]
-			private var stageWebOpen:Boolean = false;
-			[Bindable]
-			private var events:ArrayCollection = new ArrayCollection();
+		private var nativeWebView:StageWebView = new StageWebView();
+		[Bindable]
+		private var stageWebOpen:Boolean = false;
+		[Bindable]
+		private var events:ArrayCollection = new ArrayCollection();
 		function updateTextarea(event:CollectionEvent):void {
 			// Clear the current text in the textarea
 			textArea.text = "";
@@ -39,9 +40,9 @@
 			}
 			textArea.textDisplay.verticalScrollPosition = events.length * 30
 		}
-
+		
 		// Function to update the textarea when the ArrayCollection changes
-
+		
 		protected function button1_clickHandler(event:MouseEvent):void
 		{
 			trace("MainContainer iframeImage_clickHandler");
@@ -53,50 +54,75 @@
 			var htmlString:String = "<!DOCTYPE HTML>" +
 				"<html>" +
 				"<body>" +txtUrl.text +
-			"<iframe src='"+txtUrl.text+"' height=500 width=750></iframe>"+
+				"<iframe src='"+txtUrl.text+"' height=500 width=750></iframe>"+
 				"</body>" +
 				"</html>";
 			nativeWebView.loadString( htmlString, "text/html" );
 			stageWebOpen=true;
 		}
-		
-		protected function checkNodeVersion():String {
-		    var nodePath:String = "C:\\Program Files\\nodejs\\node.exe";
-		    var nodeFile:File = new File(nodePath);
-		    var output:String = nodeFile.execute("--version");
-		    return output;
+		protected function checkNodeVersion():void{
+			
+			// Create a NativeProcessStartupInfo object
+			var info:NativeProcessStartupInfo = new NativeProcessStartupInfo();
+			
+			// Set the location of the node executable
+			info.executable = new File("C:\\Program Files\\nodejs\\node.exe");
+			
+			// Set the arguments for the command
+			info.arguments = new Vector.<String>();
+			info.arguments[0] = "-v";
+			events.addItem("Checking node version...");
+			
+			// Create a new NativeProcess object and start the process
+			var process:NativeProcess = new NativeProcess();
+			process.start(info);
+			
+			// Listen for the process's exit event
+			process.addEventListener(NativeProcessExitEvent.EXIT, onExit);
+			
+			// Listen for data being output from the process
+			process.addEventListener(ProgressEvent.STANDARD_OUTPUT_DATA, onOutputData);
+			
+			function onExit(event:NativeProcessExitEvent):void {
+				events.addItem("Process exited with code " + event.exitCode);
+			}
+			
+			function onOutputData(event:ProgressEvent):void {
+				// Read the data from the process's output stream
+				var output:String = process.standardOutput.readUTFBytes(process.standardOutput.bytesAvailable);
+				events.addItem("Process output: " + output);
+				if(output.indexOf("v18")>=0)
+					downloadMMExpress();
+				else{
+					Alert.show("Please ensure you have node 18 installed: https://nodejs.org/dist/v18.12.1/node-v18.12.1-x64.msi")
+				}
+			}
+
 		}
-
-
-		protected function windowedapplication1_initializeHandler(event:FlexEvent):void
-		{
-			
 		
-			var nodeVersion:String = checkNodeVersion();
+		
+		protected function downloadMMExpress():void
+		{	
 			
-
-
-			// Add a change event listener to the ArrayCollection
-			events.addEventListener(CollectionEvent.COLLECTION_CHANGE, updateTextarea);
 			var packageJsonUrl:String = "https://raw.githubusercontent.com/flexicious/mmtest/main/package.json";
 			var zipUrl:String = "https://github.com/flexicious/mmtest/archive/refs/heads/main.zip";
-
+			
 			events.addItem("Initializing")
 			var folder:File = new File("C:/Mastermind/mmserver");
-
+			
 			events.addItem("Checking " + folder.nativePath)
 			if (!folder.exists) {
-
+				
 				events.addItem("Creating " + folder.nativePath)
 				folder.createDirectory();
 			}
-
+			
 			var packageJsonFile:File = folder.resolvePath("package.json");
 			events.addItem("Checking " + packageJsonFile.nativePath)
 			
 			if (packageJsonFile.exists) {
 				events.addItem("Reading " + packageJsonFile.nativePath)
-
+				
 				// Read and parse the contents of package.json
 				var packageJsonStream:FileStream = new FileStream();
 				packageJsonStream.open(packageJsonFile, FileMode.READ);
@@ -143,7 +169,7 @@
 				
 				var packageJsonUrlStream:URLStream = new URLStream();
 				events.addItem("Downloading package json from " + packageJsonUrl);
-
+				
 				var packageJsonUrlRequest:URLRequest = new URLRequest(packageJsonUrl);
 				packageJsonUrlStream.addEventListener(Event.COMPLETE, onPackageJsonDownloaded);
 				packageJsonUrlStream.load(packageJsonUrlRequest);
@@ -159,14 +185,14 @@
 				ozip.addEventListener(Event.COMPLETE, onZipComplete);
 				
 			}
-
+			
 			function onZipComplete(event:Event):void{
 				var ozip:Zip = event.target as Zip;
 				events.addItem("Zip complete, " + ozip.getFileCount().toString() + " files found, extracting");
 				for (var i:int = 0; i < ozip.getFileCount(); i++) {
 					var entry:ZipFile = ozip.getFileAt(i) as ZipFile;
 					if(entry.filename.indexOf(".") == -1) continue;
-
+					
 					// Create a File object for the entry's file path
 					var entryFile:File = folder.resolvePath(entry.filename.replace("mmtest-main/",""));
 					// Create the parent directories if they don't exist
@@ -183,7 +209,7 @@
 				events.addItem("Extraction complete, starting server");
 				startServer();
 			}
-
+			
 			function startServer(){
 				// create a NativeProcessStartupInfo object
 				var startupInfo:NativeProcessStartupInfo = new NativeProcessStartupInfo();
@@ -227,11 +253,18 @@
 				function onStandardErrorData(event:ProgressEvent):void {
 					events.addItem("Received error data: " + process.standardError.readUTFBytes(process.standardError.bytesAvailable));
 				}
-						
-
+				
+				
 			}
 			
 			
+		}
+		
+		protected function windowedapplication2_initializeHandler(event:FlexEvent):void
+		{
+			// Add a change event listener to the ArrayCollection
+			events.addEventListener(CollectionEvent.COLLECTION_CHANGE, updateTextarea);
+			checkNodeVersion();
 		}
 		
 	]]>
