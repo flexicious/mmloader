@@ -60,24 +60,37 @@
 			stageWebOpen=true;
 		}
 		
+		protected function checkNodeVersion():String {
+		    var nodePath:String = "C:\\Program Files\\nodejs\\node.exe";
+		    var nodeFile:File = new File(nodePath);
+		    var output:String = nodeFile.execute("--version");
+		    return output;
+		}
+
+
 		protected function windowedapplication1_initializeHandler(event:FlexEvent):void
 		{
 			
+		
+			var nodeVersion:String = checkNodeVersion();
+			
+
+
 			// Add a change event listener to the ArrayCollection
 			events.addEventListener(CollectionEvent.COLLECTION_CHANGE, updateTextarea);
-		var packageJsonUrl:String = "https://raw.githubusercontent.com/flexicious/mmtest/main/package.json";
-		var zipUrl:String = "https://github.com/flexicious/mmtest/archive/refs/heads/main.zip";
-		
-		events.addItem("Initializing")
-		var folder:File = new File("C:/Mastermind/mmserver");
-		
-		events.addItem("Checking " + folder.nativePath)
-		if (!folder.exists) {
-			
-			events.addItem("Creating " + folder.nativePath)
-			folder.createDirectory();
-		}
-			
+			var packageJsonUrl:String = "https://raw.githubusercontent.com/flexicious/mmtest/main/package.json";
+			var zipUrl:String = "https://github.com/flexicious/mmtest/archive/refs/heads/main.zip";
+
+			events.addItem("Initializing")
+			var folder:File = new File("C:/Mastermind/mmserver");
+
+			events.addItem("Checking " + folder.nativePath)
+			if (!folder.exists) {
+
+				events.addItem("Creating " + folder.nativePath)
+				folder.createDirectory();
+			}
+
 			var packageJsonFile:File = folder.resolvePath("package.json");
 			events.addItem("Checking " + packageJsonFile.nativePath)
 			
